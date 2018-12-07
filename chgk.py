@@ -57,7 +57,7 @@ def PrintQuestion(message):
             if (tmp == 1): break
 
 @bot.message_handler(regexp="Comment")
-def PrintAnswer(message):
+def PrintComment(message):
     global iter_q
     tree = ET.parse('question.xml')
     i = 0
