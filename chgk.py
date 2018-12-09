@@ -22,6 +22,8 @@ with open('token.txt','r') as output:
 current_shown_dates={}
 
 iter_q = 0
+curQ = {}
+prevAnswer = ""
 
 @bot.message_handler(commands=['start', 'help'])
 def bot_start(message):
@@ -41,77 +43,62 @@ def PrintChoice(mode):
 
 @bot.message_handler(regexp="Next question")
 def PrintQuestion(message):
-    global iter_q
+    global curQ
     keyboard = PrintChoice('q')
-    tmp = 0
-    i = 0
-    tree = ET.parse('question.xml')
-    for node in tree.iter('question'):
-        for elem in node.iter():
-            if (not elem.tag==node.tag) and (elem.tag == 'Question'):
-                if i == iter_q:
-                    bot.send_message(message.chat.id, text = "{}: {}".format(elem.tag, elem.text), reply_markup=keyboard)
-                    iter_q = iter_q + 1
-                    tmp = 1
-                i = i + 1
-            if (tmp == 1): break
+    curQ = QDictionary()
+    bot.send_message(message.chat.id, curQ.get("question"), reply_markup=keyboard)
 
 @bot.message_handler(regexp="Comment")
 def PrintAnswer(message):
-    global iter_q
-    tree = ET.parse('question.xml')
-    i = 0
-    tmp = 0
-    for node in tree.iter('question'):
-        for elem in node.iter():
-            if (not elem.tag==node.tag) and (elem.tag == 'Comments'):
-                if i == iter_q - 1:
-                    keyboard = PrintChoice('a')
-                    bot.send_message(message.chat.id, text = "{}: {}".format(elem.tag, elem.text), reply_markup=keyboard)
-                    tmp = 1
-                i = i + 1
-            if (tmp == 1): break
+    global curQ
+    keyboard = PrintChoice('a')
+    bot.send_message(message.chat.id, curQ.get("comment"), reply_markup=keyboard)
+
 
 @bot.message_handler(regexp="Answer")
 def PrintAnswer(message):
-    global iter_q
-    tree = ET.parse('question.xml')
-    i = 0
-    tmp = 0
-    for node in tree.iter('question'):
-        for elem in node.iter():
-            if (not elem.tag==node.tag) and (elem.tag == 'Answer'):
-                if i == iter_q - 1:
-                    keyboard = PrintChoice('a')
-                    bot.send_message(message.chat.id, text = "{}: {}".format(elem.tag, elem.text), reply_markup=keyboard)
-                    #bot.send_message(ci, "------------", reply_markup=keyboard)
-                    tmp = 1
-                i = i + 1
-            if (tmp == 1): break
+    global curQ
+    keyboard = PrintChoice('a')
+    bot.send_message(message.chat.id, curQ.get("answer"), reply_markup=keyboard)
+
 
 @bot.message_handler(regexp="^(?!\/)[\w]+")
 def ChooseTheme(message):
     theme = message.text
-    url = 'https://db.chgk.info/xml/search/questions/' + quote(theme) + '/types123/QC'
-    req = urllib.request.Request(url)
-    with urllib.request.urlopen(req) as response:
-        with open('question.xml','wb') as output:
-            for line in response: # files are iterable
-                output.write(line)
-    global iter_q
+    global curQ
+    #    url = 'https://db.chgk.info/xml/search/questions/' + quote(theme) + '/types123/QC'
+    #req = urllib.request.Request(url)
+    #with urllib.request.urlopen(req) as response:
+    #   with open('question.xml','wb') as output:
+    #       for line in response: # files are iterable
+    #           output.write(line)
     keyboard = PrintChoice('q')
-    tmp = 0
+    curQ = QDictionary()
+    bot.send_message(message.chat.id, curQ.get("question"), reply_markup=keyboard)
+
+def QDictionary():
+    Qdict = {}
+    global iter_q, prevAnswer
     i = 0
+    tmp = 0
     tree = ET.parse('question.xml')
     for node in tree.iter('question'):
-        for elem in node.iter():
-            if (not elem.tag==node.tag) and (elem.tag == 'Question'):
-                if i == iter_q:
-                    bot.send_message(message.chat.id, "{}: {}".format(elem.tag, elem.text), reply_markup=keyboard)
-                    iter_q = iter_q + 1
-                    tmp = 1
-                i = i + 1
-            if (tmp == 1): break
+        if i == iter_q:
+            tmp = 1
+            iter_q = iter_q + 1
+            for elem in node.iter():
+                if (not elem.tag==node.tag): #and (elem.tag == 'Question'):  "{}: {}".format(elem.tag, elem.text)
+                    if (elem.tag == 'Question'):
+                            Qdict['question'] = "{}: {}".format(elem.tag, elem.text)
+                    if (elem.tag == 'Answer'):
+                        Qdict['answer'] = "{}: {}".format(elem.tag, elem.text)
+                        if (prevAnswer == Qdict.get("answer")): tmp = 0
+                    if (elem.tag == 'Comments'):
+                            Qdict['comment'] = "{}: {}".format(elem.tag, elem.text)
+        i = i + 1
+        if (tmp == 1): break
+    prevAnswer = Qdict.get("answer")
+    return Qdict
 
 @bot.message_handler(commands=['date'])
 def check_date(message):
