@@ -15,6 +15,8 @@ import requests
 from urllib.parse import quote
 import xml.etree.ElementTree as ET
 
+import xmlParse as xp
+
 with open('token.txt','r') as output:
     token = output.read()
     bot = telebot.TeleBot(str(token).strip())
@@ -24,29 +26,36 @@ current_shown_dates={}
 iter_q = 0
 curQ = {}
 prevAnswer = ""
+theme = ""
+numPage = 0
 
 @bot.message_handler(commands=['start', 'help'])
 def bot_start(message):
     now = datetime.datetime.now() #Current date
-    bot.send_message(message.chat.id, "Чтобы начать - напиши тему\n/next : следующий вопрос\n/answer : ответ на текущий вопрос\nВопросы взяты из Базы вопросов «Что? Где? Когда?» \nhttps://db.chgk.info")
+    bot.send_message(message.chat.id, "Чтобы начать - напишите тему\nВопросы взяты из Базы вопросов «Что? Где? Когда?» \nhttps://db.chgk.info")
 
 def PrintChoice(mode):
     keyboard = types.ReplyKeyboardMarkup(one_time_keyboard=True)
     if (mode == 'q'):
         answer_button = types.KeyboardButton(text="Answer")
         next_button = types.KeyboardButton(text="Next question")
+        another_theme = types.KeyboardButton(text="Another theme")
     if (mode == 'a'):
         answer_button = types.KeyboardButton(text="Comment")
         next_button = types.KeyboardButton(text="Next question")
-    keyboard.add(answer_button, next_button)
+        another_theme = types.KeyboardButton(text="Another theme")
+    keyboard.add(answer_button, next_button, another_theme)
     return keyboard
 
 @bot.message_handler(regexp="Next question")
 def PrintQuestion(message):
     global curQ
     keyboard = PrintChoice('q')
-    curQ = QDictionary()
-    bot.send_message(message.chat.id, curQ.get("question"), reply_markup=keyboard)
+    curQ = QDictionary(message)
+    if (curQ == 1):
+        bot.send_message(message.chat.id, "Больше на эту тему нет вопросов. Напишите новую тему.")
+    else:
+        bot.send_message(message.chat.id, curQ.get("question"), reply_markup=keyboard)
 
 @bot.message_handler(regexp="Comment")
 def PrintAnswer(message):
@@ -61,27 +70,48 @@ def PrintAnswer(message):
     keyboard = PrintChoice('a')
     bot.send_message(message.chat.id, curQ.get("answer"), reply_markup=keyboard)
 
+@bot.message_handler(regexp="Another theme")
+def AnotherTheme(message):
+    bot.send_message(message.chat.id, "Напишите новую тему.")
+
+def NewXML(url):
+    req = urllib.request.Request(url)
+    with urllib.request.urlopen(req) as response:
+        with open('question.xml','wb') as output:
+            for line in response: # files are iterable
+                output.write(line)
 
 @bot.message_handler(regexp="^(?!\/)[\w]+")
 def ChooseTheme(message):
+    global curQ, theme, numPage
+    numPage = 0
     theme = message.text
-    global curQ
-    #    url = 'https://db.chgk.info/xml/search/questions/' + quote(theme) + '/types123/QC'
-    #req = urllib.request.Request(url)
-    #with urllib.request.urlopen(req) as response:
-    #   with open('question.xml','wb') as output:
-    #       for line in response: # files are iterable
-    #           output.write(line)
+    url = 'https://db.chgk.info/xml/search/questions/' + quote(theme) + '/types123/QC'
+    #NewXML(url)
     keyboard = PrintChoice('q')
-    curQ = QDictionary()
-    bot.send_message(message.chat.id, curQ.get("question"), reply_markup=keyboard)
+    curQ = QDictionary(message)
+    if (curQ == 1):
+        bot.send_message(message.chat.id, "Больше на эту тему нет вопросов. Напишите новую тему.")
+    else:
+        bot.send_message(message.chat.id, curQ.get("question"), reply_markup=keyboard)
 
-def QDictionary():
+def QDictionary(message):
     Qdict = {}
     global iter_q, prevAnswer
     i = 0
     tmp = 0
     tree = ET.parse('question.xml')
+    numQuestions = xp.numQ(tree)
+    if (iter_q == numQuestions):
+        if (numQuestions >= 50):
+            numPage = numPage + 1
+            url = 'https://db.chgk.info/xml/search/questions/' + quote(theme) + '/types123/QC?page=' + numPage
+            NewXML(url)
+            tree = ET.parse('question.xml')
+        else:
+            #we don't have q for current theme
+            iter_q = 0
+            return 1
     for node in tree.iter('question'):
         if i == iter_q:
             tmp = 1
