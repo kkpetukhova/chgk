@@ -16,6 +16,7 @@ from urllib.parse import quote
 import xml.etree.ElementTree as ET
 
 import xmlParse as xp
+import keyboard as kb
 
 with open('token.txt','r') as output:
     token = output.read()
@@ -24,90 +25,117 @@ with open('token.txt','r') as output:
 current_shown_dates={}
 
 iter_q = 0
+irand = 0
 curQ = {}
 prevAnswer = ""
 theme = ""
 numPage = 0
+rand = 0
+gap = "____________________________________________________________"
+xmlname = ""
+
 
 @bot.message_handler(commands=['start', 'help'])
 def bot_start(message):
+    global xmlname
     now = datetime.datetime.now() #Current date
-    bot.send_message(message.chat.id, "Чтобы начать - напишите тему\nВопросы взяты из Базы вопросов «Что? Где? Когда?» \nhttps://db.chgk.info")
+    keyboard = kb.PrintChoice('s');
+    bot.send_message(message.chat.id, "Вопросы взяты из Базы вопросов «Что? Где? Когда?» \nhttps://db.chgk.info", reply_markup=keyboard)
 
-def PrintChoice(mode):
-    keyboard = types.ReplyKeyboardMarkup(one_time_keyboard=True)
-    if (mode == 'q'):
-        answer_button = types.KeyboardButton(text="Answer")
-        next_button = types.KeyboardButton(text="Next question")
-        another_theme = types.KeyboardButton(text="Another theme")
-    if (mode == 'a'):
-        answer_button = types.KeyboardButton(text="Comment")
-        next_button = types.KeyboardButton(text="Next question")
-        another_theme = types.KeyboardButton(text="Another theme")
-    keyboard.add(answer_button, next_button, another_theme)
-    return keyboard
+@bot.callback_query_handler(func=lambda call: True)
+def callback_inline(call):
+    if call.message:
+        if call.data == "answer":
+            PrintAnswer(call.message)
+        if call.data == "new_theme":
+            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text = "Напишите новую тему.")
+        if call.data == "next_question":
+            PrintQuestion(call.message)
+        if call.data == "comment":
+            PrintComment(call.message)
+        if call.data == "rand_question":
+            RandomQuestion(call.message)
 
-@bot.message_handler(regexp="Next question")
+def RandomQuestion(message):
+    global curQ, rand, irand
+    rand = 1
+    url = 'https://db.chgk.info/xml/random'
+    xmlname = xp.GetXMLName(message)
+    irand = irand + 1
+    if irand == 20 or irand == 1:
+        xp.NewXML(url, xmlname)
+        irand = 1
+    keyboard = kb.PrintChoice('r')
+    curQ = QDictionary(message)
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text = curQ.get("question"))
+    bot.send_message(message.chat.id, gap, reply_markup=keyboard)
+
+
 def PrintQuestion(message):
     global curQ
-    keyboard = PrintChoice('q')
+    keyboard = kb.PrintChoice('q')
     curQ = QDictionary(message)
     if (curQ == 1):
-        bot.send_message(message.chat.id, "Больше на эту тему нет вопросов. Напишите новую тему.")
+        bot.send_message(message.chat.id, text = "Больше на эту тему нет вопросов. Напишите новую тему.")
     else:
-        bot.send_message(message.chat.id, curQ.get("question"), reply_markup=keyboard)
+        bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text = curQ.get("question"))
+        bot.send_message(message.chat.id, gap, reply_markup=keyboard)
 
-@bot.message_handler(regexp="Comment")
+
+def PrintComment(message):
+    global curQ, rand
+    if rand == 1:
+        keyboard = kb.PrintChoice('rc')
+    else:
+        keyboard = kb.PrintChoice('c')
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text = curQ.get("comment"))
+    bot.send_message(message.chat.id, gap, reply_markup=keyboard)
+
+
 def PrintAnswer(message):
     global curQ
-    keyboard = PrintChoice('a')
-    bot.send_message(message.chat.id, curQ.get("comment"), reply_markup=keyboard)
+    if rand == 1:
+        keyboard = kb.PrintChoice('ra')
+    else:
+        keyboard = kb.PrintChoice('a')
+    #bot.send_message(message.chat.id, curQ.get("answer"), reply_markup=keyboard)
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text = curQ.get("answer"))
+    bot.send_message(message.chat.id, gap, reply_markup=keyboard)
 
-
-@bot.message_handler(regexp="Answer")
-def PrintAnswer(message):
-    global curQ
-    keyboard = PrintChoice('a')
-    bot.send_message(message.chat.id, curQ.get("answer"), reply_markup=keyboard)
-
-@bot.message_handler(regexp="Another theme")
-def AnotherTheme(message):
-    bot.send_message(message.chat.id, "Напишите новую тему.")
-
-def NewXML(url):
-    req = urllib.request.Request(url)
-    with urllib.request.urlopen(req) as response:
-        with open('question.xml','wb') as output:
-            for line in response: # files are iterable
-                output.write(line)
 
 @bot.message_handler(regexp="^(?!\/)[\w]+")
 def ChooseTheme(message):
-    global curQ, theme, numPage
+    global curQ, theme, numPage, rand
+    rand = 0
     numPage = 0
     theme = message.text
     url = 'https://db.chgk.info/xml/search/questions/' + quote(theme) + '/types123/QC'
-    #NewXML(url)
-    keyboard = PrintChoice('q')
+    xmlname = xp.GetXMLName(message)
+    xp.NewXML(url, xmlname)
+    keyboard = kb.PrintChoice('q')
     curQ = QDictionary(message)
     if (curQ == 1):
         bot.send_message(message.chat.id, "Больше на эту тему нет вопросов. Напишите новую тему.")
     else:
-        bot.send_message(message.chat.id, curQ.get("question"), reply_markup=keyboard)
+        bot.send_message(message.chat.id, curQ.get("question"))
+        bot.send_message(message.chat.id, gap, reply_markup=keyboard)
+
 
 def QDictionary(message):
     Qdict = {}
     global iter_q, prevAnswer
     i = 0
     tmp = 0
-    tree = ET.parse('question.xml')
+    xmlname = xp.GetXMLName(message)
+    tree = ET.parse(xmlname)
     numQuestions = xp.numQ(tree)
     if (iter_q == numQuestions):
         if (numQuestions >= 50):
             numPage = numPage + 1
             url = 'https://db.chgk.info/xml/search/questions/' + quote(theme) + '/types123/QC?page=' + numPage
-            NewXML(url)
-            tree = ET.parse('question.xml')
+            xmlname = xp.GetXMLName(message)
+            xp.NewXML(url, xmlname)
+            tree = ET.parse(xmlname)
         else:
             #we don't have q for current theme
             iter_q = 0
@@ -135,9 +163,9 @@ def check_date(message):
     saved_day = message.date
     bot.send_message(message.chat.id, datetime.datetime.fromtimestamp(saved_day).strftime('%Y-%m-%d %H:%M:%S'))
 
-#@bot.message_handler(func=lambda m: True)
-#def echo_all(message):
-#    bot.reply_to(message, message.text)
+@bot.message_handler(func=lambda m: True)
+def echo_all(message):
+    bot.reply_to(message, message.text)
 
 
 #@bot.callback_query_handler(func=lambda call: call.data == 'ignore')
