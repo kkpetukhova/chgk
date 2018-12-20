@@ -31,7 +31,7 @@ prevAnswer = ""
 theme = ""
 numPage = 0
 rand = 0
-gap = "____________________________________________________________"
+gap = "___________________________"
 xmlname = ""
 
 
@@ -40,7 +40,8 @@ def bot_start(message):
     global xmlname
     now = datetime.datetime.now() #Current date
     keyboard = kb.PrintChoice('s');
-    bot.send_message(message.chat.id, "Вопросы взяты из Базы вопросов «Что? Где? Когда?» \nhttps://db.chgk.info", reply_markup=keyboard)
+    bot.send_message(message.chat.id, "Вопросы взяты из Базы вопросов «Что? Где? Когда?» \nhttps://db.chgk.info")
+    bot.send_message(message.chat.id, gap, reply_markup=keyboard)
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback_inline(call):
@@ -67,8 +68,11 @@ def RandomQuestion(message):
         irand = 1
     keyboard = kb.PrintChoice('r')
     curQ = QDictionary(message)
-    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text = curQ.get("question"))
-    bot.send_message(message.chat.id, gap, reply_markup=keyboard)
+    try:
+        bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text = curQ.get("question"))
+        bot.send_message(message.chat.id, gap, reply_markup=keyboard)
+    except:
+        bot.send_message(message.chat.id, "Oops, something went wrong. Line 74.")
 
 
 def PrintQuestion(message):
@@ -76,10 +80,18 @@ def PrintQuestion(message):
     keyboard = kb.PrintChoice('q')
     curQ = QDictionary(message)
     if (curQ == 1):
-        bot.send_message(message.chat.id, text = "Больше на эту тему нет вопросов. Напишите новую тему.")
+        keyboard = kb.PrintChoice('s')
+        try:
+            bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text = "Вопросов больше нет.")
+            bot.send_message(message.chat.id, gap, reply_markup=keyboard)
+        except:
+            bot.send_message(message.chat.id, "Oops, something went wrong. Line 87.")
     else:
-        bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text = curQ.get("question"))
-        bot.send_message(message.chat.id, gap, reply_markup=keyboard)
+        try:
+            bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text = curQ.get("question"))
+            bot.send_message(message.chat.id, gap, reply_markup=keyboard)
+        except:
+            bot.send_message(message.chat.id, "Oops, something went wrong. Line 93.")
 
 
 def PrintComment(message):
@@ -88,8 +100,11 @@ def PrintComment(message):
         keyboard = kb.PrintChoice('rc')
     else:
         keyboard = kb.PrintChoice('c')
-    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text = curQ.get("comment"))
-    bot.send_message(message.chat.id, gap, reply_markup=keyboard)
+    try:
+        bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text = curQ.get("comment"))
+        bot.send_message(message.chat.id, gap, reply_markup=keyboard)
+    except:
+        bot.send_message(message.chat.id, "Oops, something went wrong. Line 106.")
 
 
 def PrintAnswer(message):
@@ -99,26 +114,42 @@ def PrintAnswer(message):
     else:
         keyboard = kb.PrintChoice('a')
     #bot.send_message(message.chat.id, curQ.get("answer"), reply_markup=keyboard)
-    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text = curQ.get("answer"))
-    bot.send_message(message.chat.id, gap, reply_markup=keyboard)
+    try:
+        bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text = curQ.get("answer"))
+        bot.send_message(message.chat.id, gap, reply_markup=keyboard)
+    except:
+        bot.send_message(message.chat.id, "Oops, something went wrong. Line 120.")
 
 
 @bot.message_handler(regexp="^(?!\/)[\w]+")
 def ChooseTheme(message):
-    global curQ, theme, numPage, rand
+    global curQ, theme, numPage, rand, iter_q
+    iter_q = 0
     rand = 0
     numPage = 0
     theme = message.text
-    url = 'https://db.chgk.info/xml/search/questions/' + quote(theme) + '/types123/QC'
+    url = 'https://db.chgk.info/xml/search/questions/' + quote(theme) + '/types123/Q'
     xmlname = xp.GetXMLName(message)
     xp.NewXML(url, xmlname)
-    keyboard = kb.PrintChoice('q')
     curQ = QDictionary(message)
     if (curQ == 1):
-        bot.send_message(message.chat.id, "Больше на эту тему нет вопросов. Напишите новую тему.")
-    else:
-        bot.send_message(message.chat.id, curQ.get("question"))
+        keyboard = kb.PrintChoice('s')
+        bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text = "Вопросов больше нет.")
         bot.send_message(message.chat.id, gap, reply_markup=keyboard)
+    elif (curQ == 2):
+        keyboard = kb.PrintChoice('s')
+        try:
+            bot.send_message(message.chat.id, text = "Вопросов на эту тему нет.")
+            bot.send_message(message.chat.id, gap, reply_markup=keyboard)
+        except:
+            bot.send_message(message.chat.id, "Oops, something went wrong. Line 144.")
+    else:
+        keyboard = kb.PrintChoice('q')
+        try:
+            bot.send_message(message.chat.id, curQ.get("question"))
+            bot.send_message(message.chat.id, gap, reply_markup=keyboard)
+        except:
+            bot.send_message(message.chat.id, "Oops, something went wrong. Line 152.")
 
 
 def QDictionary(message):
@@ -129,10 +160,13 @@ def QDictionary(message):
     xmlname = xp.GetXMLName(message)
     tree = ET.parse(xmlname)
     numQuestions = xp.numQ(tree)
+    if (numQuestions == 0):
+        iter_q = 0
+        return 2
     if (iter_q == numQuestions):
         if (numQuestions >= 50):
             numPage = numPage + 1
-            url = 'https://db.chgk.info/xml/search/questions/' + quote(theme) + '/types123/QC?page=' + numPage
+            url = 'https://db.chgk.info/xml/search/questions/' + quote(theme) + '/types123/Q?page=' + numPage
             xmlname = xp.GetXMLName(message)
             xp.NewXML(url, xmlname)
             tree = ET.parse(xmlname)
